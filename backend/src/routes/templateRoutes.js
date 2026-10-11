@@ -1,11 +1,11 @@
 import express from "express";
-import { getTemplates, createTemplate, deleteTemplate, updateTemplate, getTemplateById } from "../controllers/templateController.js";
-
+import { getAllTemplates, createTemplate, deleteTemplate, updateTemplate, getTemplateById } from "../controllers/templateController.js";
+import { authenticate } from "../middleware/auth.js";
 const router = express.Router()
 
-router.get('/', getTemplates);
-router.get('/:id', getTemplateById)
-router.post('/', createTemplate)
-router.put('/:id', updateTemplate)
-router.delete('/:id', deleteTemplate)
+router.get('/', authenticate, getAllTemplates);
+router.get('/:id', authenticate, getTemplateById)
+router.post('/', authenticate, createTemplate)
+router.put('/:id', authenticate, updateTemplate)
+router.delete('/:id', authenticate, deleteTemplate)
 export default router;

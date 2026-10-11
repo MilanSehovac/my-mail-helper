@@ -2,20 +2,44 @@ import { DataTypes } from 'sequelize';
 import sequelize from '../config/db.js';
 
 const Agency = sequelize.define('Agency', {
+    id: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        autoIncrement: true,
+        allowNull: false
+    },
+    user_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true, // nullable only so pre-ownership rows survive migration; the API always sets it
+        references: {
+            model: 'users',
+            key: 'id'
+        }
+    },
     name: {
         type: DataTypes.STRING,
         allowNull: false
     },
     country: {
-        type: DataTypes.ENUM('HR', 'SRB', 'BiH', 'CG'),
+        type: DataTypes.STRING,
         allowNull: false
     },
     city: DataTypes.STRING,
     website: DataTypes.STRING,
-    focus_tags: DataTypes.STRING,
+    segment_tag: DataTypes.STRING,
     status: {
-        type: DataTypes.ENUM('Istraživanje', 'Poslat 1. mail', 'Poslat Follow-up', 'Intervju', 'Odbijen', 'Prihvaćen', 'Ghostovan'),
-        defaultValue: 'Istraživanje'
+        type: DataTypes.ENUM(
+            'Research',
+            'First Contact',
+            'First Follow-up',
+            'Second Follow-up',
+            'Third Follow-up',
+            'interview',
+            'Rejected',
+            'Accepted',
+            'Ghosted'
+        ),
+        defaultValue: 'Research'
     },
     counter: {
         type: DataTypes.INTEGER,

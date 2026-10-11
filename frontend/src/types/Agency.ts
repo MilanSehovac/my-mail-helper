@@ -1,13 +1,14 @@
 export interface Agency {
     id: number;
     name: string;
-    country: 'HR' | 'SRB' | 'BiH' | 'CG';
+    country: string;
     city?: string | null;
     website?: string | null;
-    focus_tags?: string | null;
-    status: 'Istraživanje' | 'Poslat 1. mail' | 'Poslat Follow-up' | 'Intervju' | 'Odbijen' | 'Prihvaćen' | 'Ghostovan';
+    segment_tag?: string | null;
+    status: 'Research'| 'First Contact'| 'First Follow-up'| 'Second Follow-up'| 'Third Follow-up'| 'interview'| 'Rejected'| 'Accepted' | 'Ghosted';
     counter: number;
     last_contact?: string | null;
     comment?: string | null;
+    contacts_count? : number;
 
 }

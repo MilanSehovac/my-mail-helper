@@ -8,6 +8,14 @@ const Template = sequelize.define('Template', {
         autoIncrement: true,
         allowNull: false
     },
+    user_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: {
+            model: 'users',
+            key: 'id'
+        }
+    },
     name: {
         type: DataTypes.STRING,
         allowNull: false,
@@ -19,10 +27,14 @@ const Template = sequelize.define('Template', {
     body: {
         type: DataTypes.TEXT,
         allowNull: false,
+    },
+    category: {
+        type: DataTypes.STRING,
+        allowNull: true
     }
 }, {
     tableName: 'templates',
-    timestamps: false
+    underscored: true
 });
 
 export default Template;

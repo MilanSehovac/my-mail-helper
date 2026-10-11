@@ -15,7 +15,7 @@ module.exports = {
         allowNull: false
       },
       country: {
-        type: Sequelize.ENUM('HR', 'SRB', 'BiH', 'CG'),
+        type: Sequelize.STRING,
         allowNull: false
       },
       city: {
@@ -24,12 +24,12 @@ module.exports = {
       website: {
         type: Sequelize.STRING
       },
-      focus_tags: {
+      segment_tag: {
         type: Sequelize.STRING
       },
       status: {
-        type: Sequelize.ENUM('Istraživanje', 'Poslat 1. mail', 'Poslat Follow-up', 'Intervju', 'Odbijen', 'Prihvaćen', 'Ghostovan'),
-        defaultValue: 'Istraživanje'
+        type: Sequelize.ENUM('Research', 'First Contact', 'First Follow-up', 'Second Follow-up', 'Third Follow-up','interview', 'Rejected', 'Accepted', 'Ghosted'),
+        defaultValue: 'Research'
       },
       counter: {
         type: Sequelize.INTEGER,
