@@ -1,4 +1,5 @@
-import { Campaign, CampaignContact, Template, SmtpSettings } from '../models/index.js';
+import { fn, col } from 'sequelize';
+import { Campaign, CampaignContact, Contact, Template, SmtpSettings } from '../models/index.js';
 import { countEligibleContacts, snapshotAudience } from '../services/campaignService.js';
 import { findUnknownVariables } from '../services/templateRenderer.js';
 import { parseId, isNonEmptyString, optionalString } from '../utils/validators.js';
@@ -26,6 +27,77 @@ export const getCampaigns = async (req, res) => {
         res.json(campaigns);
     } catch (error) {
         console.error('Could not get campaigns:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+}
+
+// Campaign + status breakdown + one page of recipients (?limit=50&offset=0&status=Failed)
+export const getCampaignById = async (req, res) => {
+    try {
+        const campaign = await findOwned(req);
+        if (!campaign) {
+            return res.status(404).json({ error: 'Campaign not found' });
+        }
+        const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+        const offset = Math.max(Number(req.query.offset) || 0, 0);
+        const where = { campaign_id: campaign.id };
+        const validStatuses = CampaignContact.rawAttributes.status.type.values;
+        if (req.query.status) {
+            if (!validStatuses.includes(req.query.status)) return res.status(400).json({ error: 'Invalid status filter' });
+            where.status = req.query.status;
+        }
+
+        const [counts, recipients, template] = await Promise.all([
+            CampaignContact.findAll({
+                where: { campaign_id: campaign.id },
+                attributes: ['status', [fn('COUNT', col('id')), 'count']],
+                group: ['status'],
+                raw: true,
+            }),
+            CampaignContact.findAndCountAll({
+                where,
+                include: [{ model: Contact, as: 'contact', attributes: ['id', 'full_name', 'email'] }],
+                attributes: ['id', 'status', 'sent_at', 'attempts', 'last_error', 'next_attempt_at'],
+                order: [['id', 'ASC']],
+                limit,
+                offset,
+            }),
+            Template.findOne({ where: { id: campaign.template_id, user_id: req.user.id }, attributes: ['id', 'name', 'subject'] }),
+        ]);
+
+        res.json({
+            campaign,
+            template,
+            status_counts: Object.fromEntries(counts.map((c) => [c.status, Number(c.count)])),
+            recipients: recipients.rows,
+            recipients_total: recipients.count,
+        });
+    } catch (error) {
+        console.error('Could not get campaign:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+}
+
+// Puts Failed recipients back in the queue. Interrupted sends (delivery unknown) can be duplicates - the user decides.
+export const retryFailed = async (req, res) => {
+    try {
+        const campaign = await findOwned(req);
+        if (!campaign) {
+            return res.status(404).json({ error: 'Campaign not found' });
+        }
+        if (campaign.status === 'Paused' || campaign.status === 'Scheduled') {
+            return res.status(409).json({ error: 'Launch the campaign before retrying failed recipients' });
+        }
+        const [retried] = await CampaignContact.update(
+            { status: 'Pending', attempts: 0, next_attempt_at: null, claimed_at: null },
+            { where: { campaign_id: campaign.id, status: 'Failed' } }
+        );
+        if (retried && campaign.status === 'Completed') {
+            await Campaign.update({ status: 'Sending' }, { where: { id: campaign.id, status: 'Completed' } });
+        }
+        res.json({ retried, message: retried ? `${retried} recipient(s) re-queued` : 'No failed recipients' });
+    } catch (error) {
+        console.error('Could not retry failed recipients:', error);
         res.status(500).json({ error: 'Server error' });
     }
 }

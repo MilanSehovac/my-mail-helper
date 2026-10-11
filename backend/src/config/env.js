@@ -32,5 +32,7 @@ export const config = {
     // Minimum gap between two emails of the same campaign
     sendIntervalMs: Number(process.env.MAIL_SEND_INTERVAL_MS || 180000),
     workerTickMs: Number(process.env.WORKER_TICK_MS || 30000),
+    // Run the sending worker inside the API process (set RUN_WORKER=false when using `npm run worker`)
+    runWorker: process.env.RUN_WORKER !== 'false',
     allowPrivateSmtpHosts: process.env.ALLOW_PRIVATE_SMTP_HOSTS === 'true',
 };

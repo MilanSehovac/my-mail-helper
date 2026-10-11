@@ -1,4 +1,5 @@
 import {useState} from "react";
+import {Link} from "react-router-dom";
 import {LayoutDashboard, Mail, Pause, Search, Trash2} from "lucide-react";
 interface CampaignTableProps {
     data: any[];
@@ -94,9 +95,9 @@ export default function CampaignTable({data, onDelete, onPause}: CampaignTablePr
                                         <Mail className="size-3.5 text-sky-400" />
                                     </div>
                                     <div>
-                                        <p className="text-sm font-medium text-slate-200 group-hover:text-slate-100 transition-colors">
+                                        <Link to={`/campaigns/${campaign.id}`} className="text-sm font-medium text-slate-200 group-hover:text-sky-400 transition-colors">
                                             {campaign.name}
-                                        </p>
+                                        </Link>
                                         <p className="text-xs text-slate-600 font-mono mt-0.5">#{String(campaign.id).padStart(4, "0")}</p>
                                     </div>
                                 </div>

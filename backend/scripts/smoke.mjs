@@ -120,6 +120,24 @@ check('mail has List-Unsubscribe + rendered body', /List-Unsubscribe:/i.test(mai
 const bobMail = received.find((m) => m.includes('bob@example.com')) || '';
 check('html values escaped', !bobMail.includes('<b>Bold</b>') || bobMail.includes('&lt;b&gt;'), bobMail.slice(0, 400));
 
+// detail + retry
+const detail = await call('GET', `/campaign/${camp.json.id}`, null, ta);
+check('campaign detail has counts + recipients', detail.status === 200 && detail.json.status_counts.Sent === 2 && detail.json.recipients.length === 2 && detail.json.recipients_total === 2, detail);
+check('detail status filter validated', (await call('GET', `/campaign/${camp.json.id}?status=Nope`, null, ta)).status === 400);
+check('other user cannot read campaign detail', (await call('GET', `/campaign/${camp.json.id}`, null, tb)).status === 404);
+const retry0 = await call('POST', `/campaign/${camp.json.id}/retry-failed`, null, ta);
+check('retry-failed with none failed', retry0.status === 200 && retry0.json.retried === 0, retry0);
+await db.query("update campaign_contacts set status='Failed', last_error='forced' where campaign_id=? limit 1", [camp.json.id]);
+const retry1 = await call('POST', `/campaign/${camp.json.id}/retry-failed`, null, ta);
+check('retry-failed re-queues and reopens campaign', retry1.status === 200 && retry1.json.retried === 1, retry1);
+for (let i = 0; i < 15; i++) {
+  const d = await call('GET', `/campaign/${camp.json.id}`, null, ta);
+  if (d.json.campaign.status === 'Completed') break;
+  await new Promise((r) => setTimeout(r, 1000));
+}
+const afterRetry = await call('GET', `/campaign/${camp.json.id}`, null, ta);
+check('retried recipient sent, campaign completed again', afterRetry.json.status_counts.Sent === 2 && afterRetry.json.campaign.status === 'Completed', afterRetry.json.status_counts);
+
 // unsubscribe
 const link = (mail.match(/http:\/\/localhost:8123\/api\/unsubscribe\/[\w.-]+/) || [])[0];
 check('unsubscribe link present', !!link);
@@ -133,12 +151,9 @@ check('bad token rejected', (await fetch(base + '/unsubscribe/garbage', { method
 
 // cleanup
 await db.query('delete from users where email in (?, ?)', [`smoke-a-${stamp}@example.com`, `smoke-b-${stamp}@example.com`]);
-await db.query('delete from agencies where user_id is null and name in ("Pixel","Other")');
-const [[left]] = await db.query('select (select count(*) from agencies) a, (select count(*) from contacts) c, (select count(*) from campaigns) k');
-console.log('rows left after cleanup', left);
 await db.end();
 srv.kill(); sink.close();
 console.log(results.every(Boolean) ? 'ALL PASSED' : `FAILED ${results.filter((x) => !x).length}`);
 if (!results.every(Boolean)) console.log(srvLog.slice(-1500));
-process.exit(0);
+process.exit(results.every(Boolean) ? 0 : 1);
 
