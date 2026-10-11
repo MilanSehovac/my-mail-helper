@@ -1,47 +1,72 @@
 import { Contact, Agency } from '../models/index.js';
+import { isEmail, normalizeEmail, parseId, optionalString, isNonEmptyString } from '../utils/validators.js';
 
-export const createContact = async (req, res) =>{
-    try{
-        const { full_name, email , agency_id, position } = req.body;
+const findOwnedAgency = (agencyId, userId) => {
+    const id = parseId(agencyId);
+    return id ? Agency.findOne({ where: { id, user_id: userId } }) : null;
+};
 
-        if (!full_name || !email) {
-            return res.status(400).json({ error: 'Name and email are required' });
+export const getContacts = async (req, res) => {
+    try {
+        const contacts = await Contact.findAll({
+            where: { user_id: req.user.id },
+            include: [{ model: Agency, as: 'agency', attributes: ['id', 'name'] }],
+            order: [['created_at', 'DESC']]
+        });
+        res.json(contacts);
+    } catch (error) {
+        console.error('Could not get contacts:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+export const createContact = async (req, res) => {
+    try {
+        const { full_name, email, agency_id, position, tag, source } = req.body ?? {};
+
+        if (!isNonEmptyString(full_name) || !isEmail(email)) {
+            return res.status(400).json({ error: 'Name and a valid email are required' });
+        }
+        if (!optionalString(position) || !optionalString(tag) || !optionalString(source)) {
+            return res.status(400).json({ error: 'position, tag or source is invalid' });
         }
         if (!agency_id) {
-            return res.status(400).json({error: 'Agency ID is required'});
+            return res.status(400).json({ error: 'Agency ID is required' });
         }
 
-        const agency = await Agency.findByPk(agency_id);
-
+        const agency = await findOwnedAgency(agency_id, req.user.id);
         if (!agency) {
             return res.status(404).json({ error: 'Agency not found' });
         }
 
         const newContact = await Contact.create({
-            agency_id,
-            full_name,
+            user_id: req.user.id,
+            agency_id: agency.id,
+            full_name: full_name.trim(),
             position,
-            email
-        })
+            email: normalizeEmail(email),
+            tag,
+            source: source || 'manual'
+        });
         res.status(201).json(newContact);
     } catch (err) {
-        console.log(err)
+        console.error('Could not create contact:', err);
         res.status(500).json({ error: 'Failed to create contact' });
     }
 }
 
+const findOwned = (req) => {
+    const id = parseId(req.params.id);
+    return id ? Contact.findOne({ where: { id, user_id: req.user.id } }) : null;
+};
+
 export const deleteContact = async (req, res) => {
     try {
-        const { id } = req.params;
-
-        const contact = await Contact.findByPk(id);
-
+        const contact = await findOwned(req);
         if (!contact) {
             return res.status(404).json({ error: 'Contact not found' });
         }
-
         await contact.destroy();
-
         res.status(200).json({ message: 'Contact deleted successfully' });
     } catch (err) {
         console.error('Could not delete contact:', err);
@@ -51,29 +76,30 @@ export const deleteContact = async (req, res) => {
 
 export const updateContact = async (req, res) => {
     try {
-        const { id } = req.params;
-        const { full_name, email, agency_id, position } = req.body;
-
-        const contact = await Contact.findByPk(id);
-
+        const contact = await findOwned(req);
         if (!contact) {
             return res.status(404).json({ error: 'Contact not found' });
         }
+        const { full_name, email, agency_id, position, tag } = req.body ?? {};
+        const changes = {};
 
-        if (agency_id) {
-            const agency = await Agency.findByPk(agency_id);
-            if (!agency) {
-                return res.status(404).json({ error: 'Agency not found' });
-            }
+        if (full_name !== undefined) {
+            if (!isNonEmptyString(full_name)) return res.status(400).json({ error: 'Invalid name' });
+            changes.full_name = full_name.trim();
+        }
+        if (email !== undefined) {
+            if (!isEmail(email)) return res.status(400).json({ error: 'Invalid email' });
+            changes.email = normalizeEmail(email);
+        }
+        if (position !== undefined) changes.position = position;
+        if (tag !== undefined) changes.tag = tag;
+        if (agency_id !== undefined) {
+            const agency = await findOwnedAgency(agency_id, req.user.id);
+            if (!agency) return res.status(404).json({ error: 'Agency not found' });
+            changes.agency_id = agency.id;
         }
 
-        await contact.update({
-            full_name,
-            email,
-            agency_id,
-            position
-        });
-
+        await contact.update(changes);
         res.status(200).json({ message: 'Contact updated successfully', contact });
     } catch (err) {
         console.error('Could not update contact:', err);

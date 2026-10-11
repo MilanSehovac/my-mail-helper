@@ -29,6 +29,24 @@ module.exports = {
       email: {
         type: Sequelize.STRING,
         allowNull: false
+      },
+      status: {
+        type: Sequelize.ENUM('Subscribed', 'Unsubscribed', 'Bounced'),
+        defaultValue: 'Subscribed'
+      },
+      tag:{
+        type:Sequelize.STRING,
+        allowNull: false
+      },
+      created_at: {
+        allowNull: false,
+        type: Sequelize.DATE,
+        defaultValue: Sequelize.fn('NOW')
+      },
+      updated_at: {
+        allowNull: false,
+        type: Sequelize.DATE,
+        defaultValue: Sequelize.fn('NOW')
       }
     });
   },
