@@ -68,7 +68,8 @@ try {
 
 const server = app.listen(config.port, () => {
   console.log(`Server is in ${config.status} mode, running on port ${config.port}`);
-  startCampaignWorker();
+  if (config.runWorker) startCampaignWorker();
+  else console.log('In-process worker disabled (RUN_WORKER=false); run `npm run worker` separately');
 });
 
 const shutdown = () => {

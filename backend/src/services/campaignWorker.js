@@ -6,6 +6,24 @@ import { createUnsubscribeToken } from '../utils/unsubscribeToken.js';
 import { config } from '../config/env.js';
 
 const STALE_CLAIM_MS = 10 * 60 * 1000;
+const MAX_ATTEMPTS = 3;
+const BASE_BACKOFF_MS = 5 * 60 * 1000;
+const MAX_BACKOFF_MS = 60 * 60 * 1000;
+
+// Only errors where the server definitely did NOT accept the message are safe to retry:
+// SMTP 4xx replies (temporary rejection) and failures to even connect. A timeout or socket error
+// after the connection was established is ambiguous (the mail may have been accepted), so it is not retried.
+export const isSafeToRetry = (error) => {
+    const code = Number(error?.responseCode);
+    if (code >= 400 && code < 500) return true;
+    return ['ECONNECTION', 'ETIMEDOUT', 'EDNS', 'ESOCKET'].includes(error?.code) && error?.command === 'CONN';
+};
+
+// Exponential backoff with +/-20% jitter
+export const backoffMs = (attempts) => {
+    const base = Math.min(BASE_BACKOFF_MS * 2 ** Math.max(attempts - 1, 0), MAX_BACKOFF_MS);
+    return Math.round(base * (0.8 + Math.random() * 0.4));
+};
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const log = (...args) => console.log('[worker]', ...args);
@@ -65,14 +83,18 @@ const processCampaign = async (campaignId) => {
     if (Date.now() - last < config.sendIntervalMs) return;
 
     const next = await CampaignContact.findOne({
-        where: { campaign_id: campaign.id, status: 'Pending' },
+        where: {
+            campaign_id: campaign.id,
+            status: 'Pending',
+            [Op.or]: [{ next_attempt_at: null }, { next_attempt_at: { [Op.lte]: new Date() } }],
+        },
         order: [['id', 'ASC']],
     });
     if (!next) return finishIfDone(campaign);
 
     // Atomic claim: if another worker got it first, affectedRows is 0.
     const [claimed] = await CampaignContact.update(
-        { status: 'Sending', claimed_at: new Date(), attempts: literal('attempts + 1') },
+        { status: 'Sending', claimed_at: new Date(), next_attempt_at: null, attempts: literal('attempts + 1') },
         { where: { id: next.id, status: 'Pending' } }
     );
     if (!claimed) return;
@@ -130,8 +152,19 @@ const processCampaign = async (campaignId) => {
         await refreshCounters(campaign.id);
         log(`campaign ${campaign.id}: sent to contact ${contact.id}`);
     } catch (error) {
-        log(`campaign ${campaign.id}: failed for recipient ${next.id}: ${error.message}`);
-        await markResult(next.id, { status: 'Failed', last_error: String(error.message).slice(0, 1000) });
+        const attempts = next.attempts + 1; // the claim above incremented it in the DB
+        const message = String(error.message).slice(0, 1000);
+        if (isSafeToRetry(error) && attempts < MAX_ATTEMPTS) {
+            log(`campaign ${campaign.id}: recipient ${next.id} attempt ${attempts} failed, will retry: ${error.message}`);
+            await markResult(next.id, {
+                status: 'Pending',
+                next_attempt_at: new Date(Date.now() + backoffMs(attempts)),
+                last_error: message,
+            });
+        } else {
+            log(`campaign ${campaign.id}: recipient ${next.id} failed permanently: ${error.message}`);
+            await markResult(next.id, { status: 'Failed', last_error: message });
+        }
     }
     await finishIfDone(campaign);
 };

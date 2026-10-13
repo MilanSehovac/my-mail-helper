@@ -1,21 +1,31 @@
+import { lazy, Suspense } from 'react';
+import type { ReactElement } from 'react';
 import { BrowserRouter as Router, Navigate, Route, Routes } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppLayout from './components/AppLayout';
 
-// Auth pages
+// Auth page stays eager (first paint); the app pages are split into separate chunks.
 import Auth from './pages/Auth';
 
-// App pages
-import Home from './pages/Home';
-import Agency from './pages/Agency';
-import Templates from './pages/Templates';
-import CreateAgency from './pages/CreateAgency';
-import Contacts from './pages/Contacts';
-import Campaigns from './pages/Campaigns';
-import Settings from './pages/Settings';
-import CreateTemplate from './pages/CreateTemplate';
-import CreateContact from './pages/CreateContact';
-import CreateCampaign from './pages/CreateCampaign';
+const Home = lazy(() => import('./pages/Home'));
+const Agency = lazy(() => import('./pages/Agency'));
+const Templates = lazy(() => import('./pages/Templates'));
+const CreateAgency = lazy(() => import('./pages/CreateAgency'));
+const Contacts = lazy(() => import('./pages/Contacts'));
+const Campaigns = lazy(() => import('./pages/Campaigns'));
+const CampaignDetail = lazy(() => import('./pages/CampaignDetail'));
+const Settings = lazy(() => import('./pages/Settings'));
+const CreateTemplate = lazy(() => import('./pages/CreateTemplate'));
+const CreateContact = lazy(() => import('./pages/CreateContact'));
+const CreateCampaign = lazy(() => import('./pages/CreateCampaign'));
+
+const protectedPage = (page: ReactElement) => (
+    <ProtectedRoute>
+        <AppLayout>
+            <Suspense fallback={<p className="text-sm text-slate-500">Loading…</p>}>{page}</Suspense>
+        </AppLayout>
+    </ProtectedRoute>
+);
 
 function App() {
     return (
@@ -24,112 +34,18 @@ function App() {
                 <Routes>
                     <Route path="/auth" element={<Auth />} />
                     <Route path="/" element={<Navigate to="/auth" replace />} />
-                    {/* Agency rute */}
-                    <Route
-                        path="/agencies"
-                        element={
-                            <ProtectedRoute>
-                                <AppLayout>
-                                    <Home />
-                                </AppLayout>
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/agency/:id"
-                        element={
-                            <ProtectedRoute>
-                                <AppLayout>
-                                    <Agency />
-                                </AppLayout>
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/agencies/create"
-                        element={
-                            <ProtectedRoute>
-                                <AppLayout>
-                                    <CreateAgency />
-                                </AppLayout>
-                            </ProtectedRoute>
-                        }
-                    />
-                    {/* Template rute */}
-                    <Route
-                        path="/templates"
-                        element={
-                            <ProtectedRoute>
-                                <AppLayout>
-                                    <Templates />
-                                </AppLayout>
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/templates/create"
-                        element={
-                            <ProtectedRoute>
-                                <AppLayout>
-                                    <CreateTemplate />
-                                </AppLayout>
-                            </ProtectedRoute>
-                        }
-                    />
-                    {/* Contact rute */}
-                    <Route
-                        path="/contacts"
-                        element={
-                            <ProtectedRoute>
-                                <AppLayout>
-                                    <Contacts />
-                                </AppLayout>
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/contacts/create"
-                        element={
-                            <ProtectedRoute>
-                                <AppLayout>
-                                    <CreateContact />
-                                </AppLayout>
-                            </ProtectedRoute>
-                        }
-                    />
-                    {/* Campaign rute */}
-                    <Route
-                        path="/campaigns"
-                        element={
-                            <ProtectedRoute>
-                                <AppLayout>
-                                    <Campaigns />
-                                </AppLayout>
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/campaigns/create"
-                        element={
-                            <ProtectedRoute>
-                                <AppLayout>
-                                    <CreateCampaign />
-                                </AppLayout>
-                            </ProtectedRoute>
-                        }
-                    />
-                    {/* Settings ruta */}
-                    <Route
-                        path="/settings"
-                        element={
-                            <ProtectedRoute>
-                                <AppLayout>
-                                    <Settings />
-                                </AppLayout>
-                            </ProtectedRoute>
-                        }
-                    />
-                    {/* Fallback - ako nema rute, idi na auth */}
+                    <Route path="/agencies" element={protectedPage(<Home />)} />
+                    <Route path="/agency/:id" element={protectedPage(<Agency />)} />
+                    <Route path="/agencies/create" element={protectedPage(<CreateAgency />)} />
+                    <Route path="/templates" element={protectedPage(<Templates />)} />
+                    <Route path="/templates/create" element={protectedPage(<CreateTemplate />)} />
+                    <Route path="/contacts" element={protectedPage(<Contacts />)} />
+                    <Route path="/contacts/create" element={protectedPage(<CreateContact />)} />
+                    <Route path="/campaigns" element={protectedPage(<Campaigns />)} />
+                    <Route path="/campaigns/create" element={protectedPage(<CreateCampaign />)} />
+                    <Route path="/campaigns/:id" element={protectedPage(<CampaignDetail />)} />
+                    <Route path="/settings" element={protectedPage(<Settings />)} />
+                    {/* Fallback - unknown route goes to auth */}
                     <Route path="*" element={<Navigate to="/auth" replace />} />
                 </Routes>
             </Router>

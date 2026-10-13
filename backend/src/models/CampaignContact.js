@@ -37,6 +37,11 @@ const CampaignContact = sequelize.define('CampaignContact', {
         allowNull: false,
         defaultValue: 0
     },
+    // Set while a transient failure is waiting to be retried
+    next_attempt_at: {
+        type: DataTypes.DATE,
+        allowNull: true
+    },
     last_error: {
         type: DataTypes.TEXT,
         allowNull: true

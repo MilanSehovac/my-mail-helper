@@ -44,6 +44,21 @@ test('SMTP guard blocks private targets and odd ports', async () => {
     await assert.doesNotReject(assertSafeSmtpTarget('8.8.8.8', 587));
 });
 
+test('retry classification only retries when the message was not accepted', async () => {
+    const { isSafeToRetry, backoffMs } = await import('../src/services/campaignWorker.js');
+    assert.equal(isSafeToRetry({ responseCode: 451 }), true);
+    assert.equal(isSafeToRetry({ code: 'ECONNECTION', command: 'CONN' }), true);
+    assert.equal(isSafeToRetry({ responseCode: 550 }), false);
+    assert.equal(isSafeToRetry({ code: 'EAUTH' }), false);
+    // timeout after the connection was established: delivery unknown -> never retried
+    assert.equal(isSafeToRetry({ code: 'ETIMEDOUT', command: 'DATA' }), false);
+    assert.equal(isSafeToRetry(new Error('boom')), false);
+    const first = backoffMs(1), third = backoffMs(3);
+    assert.ok(first >= 4 * 60 * 1000 && first <= 6 * 60 * 1000);
+    assert.ok(third > first);
+    assert.ok(backoffMs(20) <= 72 * 60 * 1000);
+});
+
 test('unsubscribe token round-trips and rejects tampering', () => {
     const token = createUnsubscribeToken(42);
     assert.equal(verifyUnsubscribeToken(token), 42);
