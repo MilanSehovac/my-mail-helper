@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const baseURL = import.meta.env.VITE_DEV_API_URL
+// Local dev points at the API via VITE_DEV_API_URL; deployed, the API shares the
+// frontend's domain under /api (see vercel.json), so a relative URL is correct.
+const baseURL = import.meta.env.VITE_DEV_API_URL || '/api'
 
 const API = axios.create({
     baseURL: baseURL,
